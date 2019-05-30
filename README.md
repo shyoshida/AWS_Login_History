@@ -1,3 +1,2 @@
-"# AWS_SG_Inventory" 
-"# AWS_SG_Inventory" 
-"# AWS_Login_History" 
+AWSのユーザーで366日以上ログインもAWSのプログラムにもアクセスしない
+アカウントをすべてのグループから削除後、"noloin"グループに所属させる。
