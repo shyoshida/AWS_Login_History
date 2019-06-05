@@ -17,7 +17,6 @@ logger.setLevel(logging.INFO)
 def lambda_handler(event, context):
     client = boto3.client('iam')
     Report_keys = []
-    Unused_fields = []
     Nologin_fields = []
     while True:
         response = client.generate_credential_report()
@@ -32,7 +31,7 @@ def lambda_handler(event, context):
     logger.info("Event: " + str(Report))
     for i in Report:
         if Report_keys == []:
-            Report_keys = i.split(",")
+           Report_keys = i.split(",")
         else:
             Report_dict = dict(zip(Report_keys, i.split(",")))
             Pw_lastused = DTTransfer(Report_dict['password_last_used'])
@@ -42,61 +41,27 @@ def lambda_handler(event, context):
             Pw_diff = DateDiff(Pw_lastused)
             key_diff = DateDiff(Ak1_lastused)
             User_diff = DateDiff(User_CreteTime)
-            #rootアカウントの場合は次のループ
-            if (Target == '<root_account>'):
-            #if <root_account> not in Target:じゃだめ？continueもいらないきがするんだけど
-            # 目的がなにか、となったときにroot_account以外を動かしたいならroot_accountを正とするよりもそれ以外をtureと見なすほうが良いかと。   
-                continue
-            else:
+            #rootアカウントでなければ処理を実施
+            if (Target != '<root_account>'):
                 #「nologin」所属している場合は次のループ
                 user_groups = client.list_groups_for_user(
                     UserName = Target
                 )
                 for j in user_groups["Groups"]:
                     Exc_user = j['GroupName']
-                    logger.info("Event: " + str(Exc_user))
-                    if Exc_user == "nologin":
-                        continue
-                    #同上。
-                    #1年以上ログインしていないアカウント判定
-                    elif(Pw_diff >= 366 and key_diff >= 366  and User_diff >= 90):
-                        #Add_nologin(Target)
-                        temp_Nologin_json = [{
-                        'title': 'Username',
-                        'value': Target,
-                        'short': True
-                        }]
-                        Nologin_fields = Nologin_fields + temp_Nologin_json
-                    #作成してから90日以上ログインしていないアカウント判定
-                    elif (Pw_diff >= 90 and key_diff >= 90 and User_diff >= 90):
-                    #ログインが100日以上前でかつ利用していなくて90日経過したアカウントも対象になるからこのロジックはだめでしょ
-                        #Add_nologin(Target)
-                        temp_Unused_json = [{
-                        'title': 'Username',
-                        'value': Target,
-                        'short': True
-                        }]
-                        Unused_fields = Unused_fields + temp_Unused_json
-                    #それ以外のアカウントは何も処理しない
-                    else:
-                        pass
-    #jsonテンプレート(1年以上利用のないユーザー)
-    message_json = {
-    'username': 'AWS Account info',
-    'icon_emoji': ':awsicon:',
-    'text': '1年以上利用のないユーザーです。',
-    'attachments': [
-    {
-    'fallback': 'AWS Account Info',
-    'color': 'warning',
-    'fields': Nologin_fields
-    }]}
-    if Nologin_fields == []:
-        pass
-    else:
-        logger.info("Event: " + str(message_json))
-        slacknotification(message_json)
-    #jsonテンプレート(90日以上利用のないユーザー)
+                    logger.info("GroupName: " + str(Exc_user))
+                    if Exc_user != "nologin":
+                        #1年以上または作成してから90日間一度も利用していないアカウント判定
+                        #if (Pw_diff >= 366 and key_diff >= 366  and User_diff >= 90):
+                        if (Pw_diff >= 90 and key_diff >= 90  and User_diff >= 90):
+                            #Add_nologin(Target)
+                            temp_Nologin_json = [{
+                            'title': 'Username',
+                            'value': Target,
+                            'short': True
+                            }]
+                            Nologin_fields = Nologin_fields + temp_Nologin_json
+    #jsonテンプレート
     message_json = {
     'username': 'AWS Account info',
     'icon_emoji': ':awsicon:',
@@ -105,9 +70,9 @@ def lambda_handler(event, context):
     {
     'fallback': 'AWS Account Info',
     'color': 'warning',
-    'fields': Unused_fields
+    'fields': Nologin_fields
     }]}
-    if Unused_fields == []:
+    if Nologin_fields == []:
         pass
     else:
         logger.info("Event: " + str(message_json))
@@ -143,7 +108,7 @@ def slacknotification(message_json):
         logger.error("Server connection failed: %s", e.reason)
 
 """
-#対象アカウントを「nologin」のみにする
+#対象アカウントの所属グループを「nologin」のみにする
 def Add_nologin(Target):
     client = boto3.client('iam')
     user_groups = client.list_groups_for_user(
