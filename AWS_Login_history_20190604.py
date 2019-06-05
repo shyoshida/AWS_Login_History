@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 #slackurl = os.environ['slackurl']
 #テスト用SlackURL
 slackurl = "https://hooks.slack.com/services/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"
-
+#webhockURLを書いたものをGitにアップしたらいたずらされちゃうよ？
 
 def lambda_handler(event, context):
     client = boto3.client('iam')
@@ -23,6 +23,8 @@ def lambda_handler(event, context):
     Nologin_fields = []
     while True:
         response = client.generate_credential_report()
+        logger.info("Event: " + str(response))
+        #loggingしなくていいの？処理失敗した時になにが起こったのか追えないよ？
         status = response['State']
         if   'COMPLETE' in status :
             break
@@ -30,6 +32,8 @@ def lambda_handler(event, context):
             time.sleep(30)
     response = client.get_credential_report()
     Report = (response['Content']).decode('utf-8').split("\n")
+    logger.info("Event: " + str(Report)) 
+    #loggingしなくていいの？処理失敗した時になにが起こったのか追えないよ？   
     for i in Report:
         if Report_keys == []:
             Report_keys = i.split(",")
@@ -43,6 +47,8 @@ def lambda_handler(event, context):
             key_diff = DateDiff(Ak1_lastused)
             User_diff = DateDiff(User_CreteTime)
             if(Pw_diff >= 366 and key_diff >= 366 and not User_diff >= 90):
+                #同じ条件式を多重にelifするのは芸がないのでもうちょっと工夫しましょう。
+                #root_accountのif文はいいと思うけど入れる場所を変えるともっと良くなる。
                 if Target == '<root_account>':
                     pass
                 elif User_diff >= 90:
@@ -90,6 +96,8 @@ def lambda_handler(event, context):
     if Nologin_fields == []:
         pass
     else:
+        logger.info("Event: " + str(message_json))     
+        #ここのlogingはお好み  
         slacknotification(message_json)
     message_json = {
     'username': 'AWS Account info',
@@ -104,6 +112,8 @@ def lambda_handler(event, context):
     if Unused_fields == []:
         pass
     else:
+        logger.info("Event: " + str(message_json)) 
+        #ここのlogingはお好み       
         slacknotification(message_json)
 
 
@@ -150,6 +160,7 @@ def Add_nologin(Target):
         if GroupName == "nologin":
             pass
         else:
+            #ここでGroupName==nologinの判定しているのであれば、else:でtry/exceptの処理をやるべきでは？
         try:
             client.remove_user_from_group(
                 GroupName = GroupName,
@@ -160,11 +171,12 @@ def Add_nologin(Target):
             GroupName = "nologin",
             UserName = Target
             )
+        #try/exceptで書くのはよくない。nologinか否かの判定を事前に実行しているのだから、そのうえで書きましょう。
     client.add_user_to_group(
         GroupName = "nologin",
         UserName = Target
     )
-
+    #nologinGroupへ追加する処理が重複している。工夫しましょう。
 """
 
 event=""
