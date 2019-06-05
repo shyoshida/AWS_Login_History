@@ -42,7 +42,7 @@ def lambda_handler(event, context):
             Pw_diff = DateDiff(Pw_lastused)
             key_diff = DateDiff(Ak1_lastused)
             User_diff = DateDiff(User_CreteTime)
-            #rootアカウントは処理から除外
+            #rootアカウントの場合は次のループ
             if (Target == '<root_account>'):
                 continue
             else:
