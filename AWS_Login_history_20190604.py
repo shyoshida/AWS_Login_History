@@ -12,10 +12,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 #slackurl = os.environ['slackurl']
-#テスト用SlackURL
-slackurl = "https://hooks.slack.com/services/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"
-#webhockURLを書いたものをGitにアップしたらいたずらされちゃうよ？
 
+#メイン処理
 def lambda_handler(event, context):
     client = boto3.client('iam')
     Report_keys = []
@@ -24,7 +22,6 @@ def lambda_handler(event, context):
     while True:
         response = client.generate_credential_report()
         logger.info("Event: " + str(response))
-        #loggingしなくていいの？処理失敗した時になにが起こったのか追えないよ？
         status = response['State']
         if   'COMPLETE' in status :
             break
@@ -32,11 +29,10 @@ def lambda_handler(event, context):
             time.sleep(30)
     response = client.get_credential_report()
     Report = (response['Content']).decode('utf-8').split("\n")
-    logger.info("Event: " + str(Report)) 
-    #loggingしなくていいの？処理失敗した時になにが起こったのか追えないよ？   
+    logger.info("Event: " + str(Report))
     for i in Report:
         if Report_keys == []:
-            Report_keys = i.split(",")
+           Report_keys = i.split(",")
         else:
             Report_dict = dict(zip(Report_keys, i.split(",")))
             Pw_lastused = DTTransfer(Report_dict['password_last_used'])
@@ -46,19 +42,21 @@ def lambda_handler(event, context):
             Pw_diff = DateDiff(Pw_lastused)
             key_diff = DateDiff(Ak1_lastused)
             User_diff = DateDiff(User_CreteTime)
-            if(Pw_diff >= 366 and key_diff >= 366 and not User_diff >= 90):
-                #同じ条件式を多重にelifするのは芸がないのでもうちょっと工夫しましょう。
-                #root_accountのif文はいいと思うけど入れる場所を変えるともっと良くなる。
-                if Target == '<root_account>':
-                    pass
-                elif User_diff >= 90:
-                    user_groups = client.list_groups_for_user(
-                        UserName = Target
-                    )
-                    for j in user_groups["Groups"]:
-                        Exc_user = j['GroupName']
-                        if Exc_user == "nologin":
-                            continue
+            #rootアカウントは処理から除外
+            if (Target == '<root_account>'):
+                continue
+            else:
+                #「nologin」所属している場合は次のループ
+                user_groups = client.list_groups_for_user(
+                    UserName = Target
+                )
+                for j in user_groups["Groups"]:
+                    Exc_user = j['GroupName']
+                    logger.info("Event: " + str(Exc_user))
+                    if Exc_user == "nologin":
+                        continue
+                    #1年以上ログインしていないアカウント判定
+                    elif(Pw_diff >= 366 and key_diff >= 366  and User_diff >= 90):
                         #Add_nologin(Target)
                         temp_Nologin_json = [{
                         'title': 'Username',
@@ -66,14 +64,8 @@ def lambda_handler(event, context):
                         'short': True
                         }]
                         Nologin_fields = Nologin_fields + temp_Nologin_json
-                elif Pw_diff >= 90 and key_diff >= 90:
-                    user_groups = client.list_groups_for_user(
-                        UserName = Target
-                    )
-                    for j in user_groups["Groups"]:
-                        Exc_user = j['GroupName']
-                        if Exc_user == "nologin":
-                            continue
+                    #作成してから90日以上ログインしていないアカウント判定
+                    elif (Pw_diff >= 90 and key_diff >= 90 and User_diff >= 90):
                         #Add_nologin(Target)
                         temp_Unused_json = [{
                         'title': 'Username',
@@ -81,12 +73,14 @@ def lambda_handler(event, context):
                         'short': True
                         }]
                         Unused_fields = Unused_fields + temp_Unused_json
-                else:
-                    pass
+                    #それ以外のアカウントは何も処理しない
+                    else:
+                        pass
+    #jsonテンプレート(1年以上利用のないユーザー)
     message_json = {
     'username': 'AWS Account info',
     'icon_emoji': ':awsicon:',
-    'text': '1年以上ログインのないユーザーです。',
+    'text': '1年以上利用のないユーザーです。',
     'attachments': [
     {
     'fallback': 'AWS Account Info',
@@ -96,13 +90,13 @@ def lambda_handler(event, context):
     if Nologin_fields == []:
         pass
     else:
-        logger.info("Event: " + str(message_json))     
-        #ここのlogingはお好み  
+        logger.info("Event: " + str(message_json))
         slacknotification(message_json)
+    #jsonテンプレート(90日以上利用のないユーザー)
     message_json = {
     'username': 'AWS Account info',
     'icon_emoji': ':awsicon:',
-    'text': '90日以上ログインのないユーザーです。',
+    'text': '90日以上利用のないユーザーです。',
     'attachments': [
     {
     'fallback': 'AWS Account Info',
@@ -112,11 +106,10 @@ def lambda_handler(event, context):
     if Unused_fields == []:
         pass
     else:
-        logger.info("Event: " + str(message_json)) 
-        #ここのlogingはお好み       
+        logger.info("Event: " + str(message_json))
         slacknotification(message_json)
 
-
+#Date変換処理
 def DTTransfer(DTTransferDate):
     try:
         DTTransferDate = DTTransferDate[0:10]
@@ -125,6 +118,7 @@ def DTTransfer(DTTransferDate):
     except (ValueError):
         return("DTTransferDate_ERROR")
 
+#日付差分計算
 def DateDiff(CalculationDate):
     Reference_date = datetime.date.today()
     try:
@@ -132,6 +126,7 @@ def DateDiff(CalculationDate):
     except (TypeError):
         return(400)
 
+#Slack通知処理
 def slacknotification(message_json):
     req = Request(slackurl, json.dumps(message_json).encode('utf-8'))
     try:
@@ -144,41 +139,34 @@ def slacknotification(message_json):
         logger.error("Server connection failed: %s", e.reason)
 
 """
-#nologin移動
+#対象アカウントを「nologin」のみにする
 def Add_nologin(Target):
+    client = boto3.client('iam')
     user_groups = client.list_groups_for_user(
         UserName = Target
     )
-#パスワード初期化
-#    client.update_login_profile(
-#        UserName = ,
-#        Password = ,
-#        PasswordResetRequired = True
-#    )
+    Pass_Reset(Target)
     for Remove_User in user_groups['Groups']:
         GroupName = Remove_User['GroupName']
-        if GroupName == "nologin":
-            pass
-        else:
-            #ここでGroupName==nologinの判定しているのであれば、else:でtry/exceptの処理をやるべきでは？
-        try:
-            client.remove_user_from_group(
-                GroupName = GroupName,
-                UserName = Target
-                )
-        except:
-            client.add_user_to_group(
-            GroupName = "nologin",
+        logger.info("Event: " + str(GroupName))
+        client.remove_user_from_group(
+            GroupName = GroupName,
             UserName = Target
-            )
-        #try/exceptで書くのはよくない。nologinか否かの判定を事前に実行しているのだから、そのうえで書きましょう。
+        )
     client.add_user_to_group(
         GroupName = "nologin",
         UserName = Target
     )
-    #nologinGroupへ追加する処理が重複している。工夫しましょう。
-"""
 
+#対象アカウントパスワード初期化
+def Pass_Reset(Target)
+    client = boto3.client('iam')
+    client.update_login_profile(
+        UserName = Target,
+        Password = "Axis@User",
+        PasswordResetRequired = True
+    )
+"""
 event=""
 context=""
 lambda_handler(event,context)
