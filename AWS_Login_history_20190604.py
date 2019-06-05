@@ -32,7 +32,7 @@ def lambda_handler(event, context):
     logger.info("Event: " + str(Report))
     for i in Report:
         if Report_keys == []:
-           Report_keys = i.split(",")
+            Report_keys = i.split(",")
         else:
             Report_dict = dict(zip(Report_keys, i.split(",")))
             Pw_lastused = DTTransfer(Report_dict['password_last_used'])
@@ -44,6 +44,8 @@ def lambda_handler(event, context):
             User_diff = DateDiff(User_CreteTime)
             #rootアカウントの場合は次のループ
             if (Target == '<root_account>'):
+            #if <root_account> not in Target:じゃだめ？continueもいらないきがするんだけど
+            # 目的がなにか、となったときにroot_account以外を動かしたいならroot_accountを正とするよりもそれ以外をtureと見なすほうが良いかと。   
                 continue
             else:
                 #「nologin」所属している場合は次のループ
@@ -55,6 +57,7 @@ def lambda_handler(event, context):
                     logger.info("Event: " + str(Exc_user))
                     if Exc_user == "nologin":
                         continue
+                    #同上。
                     #1年以上ログインしていないアカウント判定
                     elif(Pw_diff >= 366 and key_diff >= 366  and User_diff >= 90):
                         #Add_nologin(Target)
@@ -66,6 +69,7 @@ def lambda_handler(event, context):
                         Nologin_fields = Nologin_fields + temp_Nologin_json
                     #作成してから90日以上ログインしていないアカウント判定
                     elif (Pw_diff >= 90 and key_diff >= 90 and User_diff >= 90):
+                    #ログインが100日以上前でかつ利用していなくて90日経過したアカウントも対象になるからこのロジックはだめでしょ
                         #Add_nologin(Target)
                         temp_Unused_json = [{
                         'title': 'Username',
