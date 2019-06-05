@@ -42,8 +42,8 @@ def lambda_handler(event, context):
             Pw_diff = DateDiff(Pw_lastused)
             key_diff = DateDiff(Ak1_lastused)
             User_diff = DateDiff(User_CreteTime)
-            if(Pw_diff >= 366 and key_diff >= 366):
-                if Target == '<root_account>' or not User_diff >= 90:
+            if(Pw_diff >= 366 and key_diff >= 366 and not User_diff >= 90):
+                if Target == '<root_account>':
                     pass
                 elif User_diff >= 90:
                     user_groups = client.list_groups_for_user(
